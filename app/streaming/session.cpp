@@ -279,7 +279,8 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
                             StreamingPreferences::RendererSelection renderer,
                             SDL_Window* window, int videoFormat, int width, int height,
                             int frameRate, bool enableVsync, bool enableFramePacing, bool testOnly, IVideoDecoder*& chosenDecoder,
-                            int presentBufferFrames)
+                            int presentBufferFrames,
+                            bool ignoreAspectRatio)
 {
     DECODER_PARAMETERS params;
 
@@ -296,6 +297,7 @@ bool Session::chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
     params.enableVsync = enableVsync;
     params.enableFramePacing = enableFramePacing;
     params.presentBufferFrames = presentBufferFrames;
+    params.ignoreAspectRatio = ignoreAspectRatio;
     params.testOnly = testOnly;
     params.vds = vds;
     params.renderer = renderer;
@@ -2218,7 +2220,8 @@ void Session::exec()
                                    enableVsync && m_Preferences->framePacing,
                                    false,
                                    s_ActiveSession->m_VideoDecoder,
-                                   m_Preferences->presentJitterBuffer ? 2 : 0)) {
+                                   m_Preferences->presentJitterBuffer ? 2 : 0,
+                                   m_Preferences->ignoreAspectRatio)) {
                     SDL_UnlockMutex(m_DecoderLock);
                     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                                  "Failed to recreate decoder after reset");
