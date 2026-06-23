@@ -428,6 +428,9 @@ bool PlVkRenderer::initialize(PDECODER_PARAMETERS params)
     m_Window = params->window;
     m_MaxVideoFps = params->frameRate;
 
+    // Stretch to fill the surface when the aspect ratio is ignored
+    m_IgnoreAspectRatio = params->ignoreAspectRatio;
+
     unsigned int instanceExtensionCount = 0;
     if (!SDL_Vulkan_GetInstanceExtensions(params->window, &instanceExtensionCount, nullptr)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -1062,7 +1065,9 @@ void PlVkRenderer::renderFrame(AVFrame *frame)
     dst.h = targetFrame.crop.y1 - targetFrame.crop.y0;
 
     // Scale the video to the surface size while preserving the aspect ratio
-    StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+    if (!m_IgnoreAspectRatio) {
+        StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+    }
 
     targetFrame.crop.x0 = dst.x;
     targetFrame.crop.y0 = dst.y;
