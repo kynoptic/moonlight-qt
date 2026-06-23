@@ -11,6 +11,11 @@
 #include "streaming/streamutils.h"
 #include "path.h"
 
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QCoreApplication>
+
 #import <Cocoa/Cocoa.h>
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -78,17 +83,36 @@ public:
           m_LastFrameWidth(-1),
           m_LastFrameHeight(-1),
           m_LastDrawableWidth(-1),
-          m_LastDrawableHeight(-1)
+          m_LastDrawableHeight(-1),
+          m_PresentCsvFile(nullptr),
+          m_PresentCsvLock(SDL_CreateMutex()),
+          m_PresentEpochAnchor(0),
+          m_LastPresentTs(0),
+          m_PresentRowsSinceFlush(0),
+          m_PresentPid(0)
     {
     }
 
     virtual ~VTMetalRenderer() override
     { @autoreleasepool {
-        // Stop the display link and free associated state
+        // Stop the display link and free associated state. The display link is
+        // invalidated here before we tear down the present CSV, so no further
+        // present-cadence rows can be logged once we take the lock below.
         stopDisplayLink();
         av_frame_free(&m_LatestUnrenderedFrame);
         SDL_DestroyCond(m_FrameReady);
         SDL_DestroyMutex(m_FrameLock);
+
+        if (m_PresentCsvFile != nullptr) {
+            SDL_LockMutex(m_PresentCsvLock);
+            m_PresentCsvStream.flush();
+            m_PresentCsvStream.setDevice(nullptr);
+            m_PresentCsvFile->close();
+            delete m_PresentCsvFile;
+            m_PresentCsvFile = nullptr;
+            SDL_UnlockMutex(m_PresentCsvLock);
+        }
+        SDL_DestroyMutex(m_PresentCsvLock);
 
         if (m_HwContext != nullptr) {
             av_buffer_unref(&m_HwContext);
@@ -572,6 +596,82 @@ public:
         [commandBuffer waitUntilCompleted];
     }}
 
+    void openPresentCsv()
+    {
+        QByteArray csvPath = qgetenv("ML_PRESENT_CSV");
+        if (csvPath.isEmpty()) {
+            return;
+        }
+
+        m_PresentCsvFile = new QFile(QString::fromLocal8Bit(csvPath));
+        if (!m_PresentCsvFile->open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Failed to open ML_PRESENT_CSV path: %s", csvPath.constData());
+            delete m_PresentCsvFile;
+            m_PresentCsvFile = nullptr;
+            return;
+        }
+
+        m_PresentCsvStream.setDevice(m_PresentCsvFile);
+        m_PresentCsvStream << "Application,ProcessID,MsBetweenPresents,TimeInSeconds,Dropped\n";
+        m_PresentCsvStream.flush();
+        // TimeInSeconds is relative to this CACurrentMediaTime() anchor, matching
+        // the timebase of the display link's target timestamps logged below.
+        m_PresentEpochAnchor = CACurrentMediaTime();
+        m_PresentPid = QCoreApplication::applicationPid();
+
+        // Wall-clock epoch sidecar so offline tools can place these present
+        // timestamps on an absolute timeline (mirrors the Pacer CSV sidecar).
+        QFile epochFile(QString::fromLocal8Bit(csvPath) + ".epoch");
+        if (epochFile.open(QFile::WriteOnly | QFile::Truncate | QFile::Text)) {
+            QTextStream(&epochFile) << QDateTime::currentMSecsSinceEpoch() << "\n";
+            epochFile.close();
+        }
+
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Writing on-glass present-cadence CSV to %s", csvPath.constData());
+    }
+
+    // tsSeconds is in the CACurrentMediaTime() timebase (the display link's target
+    // scanout time for a fresh present, or CACurrentMediaTime() for a handoff drop).
+    void logPresentRow(double tsSeconds, bool dropped)
+    {
+        if (m_PresentCsvFile == nullptr) {
+            return;
+        }
+
+        SDL_LockMutex(m_PresentCsvLock);
+
+        // A dropped frame emits a marker row (interval 0) and leaves m_LastPresentTs
+        // untouched, so the gap surfaces as an inflated interval on the next real
+        // present — and a repeat (refresh with no fresh frame) logs nothing at all,
+        // stretching that same next interval.
+        double msBetweenPresents;
+        if (dropped || m_LastPresentTs == 0) {
+            msBetweenPresents = 0.0;
+        }
+        else {
+            msBetweenPresents = (tsSeconds - m_LastPresentTs) * 1000.0;
+        }
+        double timeInSeconds = tsSeconds - m_PresentEpochAnchor;
+
+        m_PresentCsvStream << "Moonlight," << m_PresentPid << ','
+                           << QString::number(msBetweenPresents, 'f', 4) << ','
+                           << QString::number(timeInSeconds, 'f', 6) << ','
+                           << (dropped ? 1 : 0) << '\n';
+
+        if (!dropped) {
+            m_LastPresentTs = tsSeconds;
+        }
+
+        if (++m_PresentRowsSinceFlush >= 64) {
+            m_PresentCsvStream.flush();
+            m_PresentRowsSinceFlush = 0;
+        }
+
+        SDL_UnlockMutex(m_PresentCsvLock);
+    }
+
     // Caller frees frame after we return
     virtual void renderFrame(AVFrame* frame) override
     { @autoreleasepool {
@@ -612,7 +712,13 @@ public:
             SDL_UnlockMutex(m_FrameLock);
             SDL_CondSignal(m_FrameReady);
 
+            // If a previously handed-off frame was still waiting, it never reached
+            // glass — the source outran the display. Record it as a dropped frame.
+            bool droppedOld = (oldFrame != nullptr);
             av_frame_free(&oldFrame);
+            if (droppedOld) {
+                logPresentRow(CACurrentMediaTime(), true);
+            }
         }
         else {
             // Render to the next drawable right now when CAMetalDisplayLink is not in use
@@ -622,6 +728,10 @@ public:
             }
 
             renderFrameIntoDrawable(frame, drawable);
+
+            // Without a display link, the present happens at frame arrival, so
+            // this logs arrival-paced presents (no separate repeat concept).
+            logPresentRow(CACurrentMediaTime(), false);
         }
     }}
 
@@ -663,6 +773,8 @@ public:
 
         m_Window = params->window;
         m_FrameRateRange = CAFrameRateRangeMake(params->frameRate, params->frameRate, params->frameRate);
+
+        openPresentCsv();
 
         id<MTLDevice> device = getMetalDevice();
         if (!device) {
@@ -933,6 +1045,12 @@ public:
         if (frame != nullptr) {
             renderFrameIntoDrawable(frame, drawable);
             av_frame_free(&frame);
+
+            // A fresh frame reached glass this refresh. Log it at the display
+            // link's target scanout time. A refresh that found no fresh frame
+            // (the early return above) logs nothing, so the judder shows up as a
+            // stretched interval before the next present.
+            logPresentRow(targetTimestamp, false);
         }
     }
 
@@ -961,6 +1079,24 @@ private:
     int m_LastFrameHeight;
     int m_LastDrawableWidth;
     int m_LastDrawableHeight;
+
+    // Optional on-glass present-cadence CSV (enabled via ML_PRESENT_CSV). Unlike
+    // the Pacer's ML_PACER_CSV — which on macOS logs the decode->renderer handoff
+    // because the pacing queue is bypassed — this logs the actual CAMetalDisplayLink
+    // present point: one row per *fresh* frame shown, timestamped with the display
+    // link's target scanout time. A refresh with no fresh frame (a repeat / visible
+    // judder) emits no row, so it surfaces as a stretched interval on the next
+    // present, exactly matching the analyzer's existing hitch definition. Frames
+    // discarded at handoff (source outran the display) emit a Dropped=1 marker.
+    // Written from the display-link thread and the render thread, so guarded by
+    // m_PresentCsvLock.
+    QFile* m_PresentCsvFile;
+    QTextStream m_PresentCsvStream;
+    SDL_mutex* m_PresentCsvLock;
+    double m_PresentEpochAnchor;
+    double m_LastPresentTs;
+    int m_PresentRowsSinceFlush;
+    qint64 m_PresentPid;
 };
 
 @implementation DisplayLinkDelegate {
