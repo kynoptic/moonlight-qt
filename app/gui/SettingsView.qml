@@ -871,6 +871,22 @@ Flickable {
                                     :
                                       qsTr("HDR streaming is not supported on this PC.")
                 }
+
+                CheckBox {
+                    id: ignoreAspectRatioCheck
+                    width: parent.width
+                    hoverEnabled: true
+                    text: qsTr("Stretch presentation")
+                    font.pointSize:  12
+                    checked: StreamingPreferences.ignoreAspectRatio
+                    onCheckedChanged: {
+                        StreamingPreferences.ignoreAspectRatio = checked
+                    }
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 12000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Ignores the source aspect ratio and stretches the video to fill the screen. Required to send Half-SBS 3D to AR/XR glasses that only accept Full-SBS (e.g. XREAL Air/One).")
+                }
             }
         }
 

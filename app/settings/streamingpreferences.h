@@ -134,6 +134,7 @@ public:
     Q_PROPERTY(bool absoluteMouseMode MEMBER absoluteMouseMode NOTIFY absoluteMouseModeChanged)
     Q_PROPERTY(bool absoluteTouchMode MEMBER absoluteTouchMode NOTIFY absoluteTouchModeChanged)
     Q_PROPERTY(bool framePacing MEMBER framePacing NOTIFY framePacingChanged)
+    Q_PROPERTY(bool ignoreAspectRatio MEMBER ignoreAspectRatio NOTIFY ignoreAspectRatioChanged)
     Q_PROPERTY(bool connectionWarnings MEMBER connectionWarnings NOTIFY connectionWarningsChanged)
     Q_PROPERTY(bool configurationWarnings MEMBER configurationWarnings NOTIFY configurationWarningsChanged)
     Q_PROPERTY(bool richPresence MEMBER richPresence NOTIFY richPresenceChanged)
@@ -176,6 +177,7 @@ public:
     bool absoluteMouseMode;
     bool absoluteTouchMode;
     bool framePacing;
+    bool ignoreAspectRatio;
     bool connectionWarnings;
     bool configurationWarnings;
     bool richPresence;
@@ -215,6 +217,7 @@ signals:
     void quitAppAfterChanged();
     void absoluteMouseModeChanged();
     void absoluteTouchModeChanged();
+    void ignoreAspectRatioChanged();
     void audioConfigChanged();
     void videoCodecConfigChanged();
     void enableHdrChanged();

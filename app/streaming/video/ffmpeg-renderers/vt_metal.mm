@@ -78,7 +78,8 @@ public:
           m_LastFrameWidth(-1),
           m_LastFrameHeight(-1),
           m_LastDrawableWidth(-1),
-          m_LastDrawableHeight(-1)
+          m_LastDrawableHeight(-1),
+          m_IgnoreAspectRatio(false)
     {
     }
 
@@ -160,7 +161,10 @@ public:
         dst.x = dst.y = 0;
         dst.w = drawableWidth;
         dst.h = drawableHeight;
-        StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+
+        if (!m_IgnoreAspectRatio) {
+            StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+        }
 
         // Convert screen space to normalized device coordinates
         SDL_FRect renderRect;
@@ -740,6 +744,9 @@ public:
 
             // Allow tearing if V-Sync is off (also requires direct display path)
             m_MetalLayer.displaySyncEnabled = params->enableVsync;
+
+            // Stretch to fill the surface when the aspect ratio is ignored
+            m_IgnoreAspectRatio = params->ignoreAspectRatio;
         }
 
         return true;
@@ -961,6 +968,7 @@ private:
     int m_LastFrameHeight;
     int m_LastDrawableWidth;
     int m_LastDrawableHeight;
+    bool m_IgnoreAspectRatio;
 };
 
 @implementation DisplayLinkDelegate {
