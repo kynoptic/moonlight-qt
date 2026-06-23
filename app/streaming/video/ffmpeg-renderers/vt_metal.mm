@@ -16,6 +16,8 @@
 #include <QDateTime>
 #include <QCoreApplication>
 
+#include <queue>
+
 #import <Cocoa/Cocoa.h>
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -89,7 +91,9 @@ public:
           m_PresentEpochAnchor(0),
           m_LastPresentTs(0),
           m_PresentRowsSinceFlush(0),
-          m_PresentPid(0)
+          m_PresentPid(0),
+          m_PresentBufferFrames(0),
+          m_PresentWarmed(false)
     {
     }
 
@@ -100,6 +104,11 @@ public:
         // present-cadence rows can be logged once we take the lock below.
         stopDisplayLink();
         av_frame_free(&m_LatestUnrenderedFrame);
+        while (!m_PresentQueue.empty()) {
+            AVFrame* f = m_PresentQueue.front();
+            m_PresentQueue.pop();
+            av_frame_free(&f);
+        }
         SDL_DestroyCond(m_FrameReady);
         SDL_DestroyMutex(m_FrameLock);
 
@@ -701,22 +710,34 @@ public:
             AVFrame* newFrame = av_frame_alloc();
             av_frame_move_ref(newFrame, frame);
 
-            // Replace any existing unrendered frame with this new one
-            // and signal the CAMetalDisplayLink callback
-            AVFrame* oldFrame = nullptr;
-            SDL_LockMutex(m_FrameLock);
-            if (m_LatestUnrenderedFrame != nullptr) {
-                oldFrame = m_LatestUnrenderedFrame;
+            AVFrame* droppedFrame = nullptr;
+            if (m_PresentBufferFrames > 0) {
+                // Jitter-buffer mode: enqueue into the FIFO cushion. Bound it at
+                // the floor plus two frames of headroom, dropping the stalest
+                // frame when the source outruns the display.
+                int cap = m_PresentBufferFrames + 2;
+                SDL_LockMutex(m_FrameLock);
+                m_PresentQueue.push(newFrame);
+                if ((int)m_PresentQueue.size() > cap) {
+                    droppedFrame = m_PresentQueue.front();
+                    m_PresentQueue.pop();
+                }
+                SDL_UnlockMutex(m_FrameLock);
             }
-            m_LatestUnrenderedFrame = newFrame;
-            SDL_UnlockMutex(m_FrameLock);
+            else {
+                // Latency-minimizing default (control): keep only the latest frame
+                // and signal the CAMetalDisplayLink callback.
+                SDL_LockMutex(m_FrameLock);
+                droppedFrame = m_LatestUnrenderedFrame;
+                m_LatestUnrenderedFrame = newFrame;
+                SDL_UnlockMutex(m_FrameLock);
+            }
             SDL_CondSignal(m_FrameReady);
 
-            // If a previously handed-off frame was still waiting, it never reached
-            // glass — the source outran the display. Record it as a dropped frame.
-            bool droppedOld = (oldFrame != nullptr);
-            av_frame_free(&oldFrame);
-            if (droppedOld) {
+            // A frame displaced here never reached glass — the source outran the
+            // display. Record it as a dropped frame.
+            if (droppedFrame != nullptr) {
+                av_frame_free(&droppedFrame);
                 logPresentRow(CACurrentMediaTime(), true);
             }
         }
@@ -775,6 +796,27 @@ public:
         m_FrameRateRange = CAFrameRateRangeMake(params->frameRate, params->frameRate, params->frameRate);
 
         openPresentCsv();
+
+        // Optional present-side jitter buffer depth, in whole frames. Driven by
+        // the "Smooth frame delivery" setting (2 frames when enabled); the
+        // ML_PRESENT_BUFFER environment variable overrides it for experimentation.
+        // Capped to keep added latency and the retained-surface count sane.
+        {
+            int n = params->presentBufferFrames;
+            bool ok = false;
+            int envN = qEnvironmentVariableIntValue("ML_PRESENT_BUFFER", &ok);
+            if (ok) {
+                n = envN;
+            }
+            if (n > 0) {
+                m_PresentBufferFrames = SDL_min(n, 4);
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "Present jitter buffer: %d frame cushion (%.1f ms added latency at %.0f FPS)",
+                            m_PresentBufferFrames,
+                            m_PresentBufferFrames * 1000.0 / params->frameRate,
+                            (double)params->frameRate);
+            }
+        }
 
         id<MTLDevice> device = getMetalDevice();
         if (!device) {
@@ -1035,7 +1077,24 @@ public:
 
         // Wait for a new frame to be ready
         SDL_LockMutex(m_FrameLock);
-        if (m_LatestUnrenderedFrame != nullptr || SDL_CondWaitTimeout(m_FrameReady, m_FrameLock, waitTimeMs) == 0) {
+        if (m_PresentBufferFrames > 0) {
+            // Jitter-buffer mode: present the oldest frame in the FIFO cushion.
+            // Wait briefly only if the cushion is empty. Warm up to the floor
+            // before the first present so the buffer can absorb later arrivals;
+            // once warmed it stays so, presenting whatever is available rather
+            // than re-stalling to refill (which would add judder, not remove it).
+            if (m_PresentQueue.empty() && waitTimeMs > 0) {
+                SDL_CondWaitTimeout(m_FrameReady, m_FrameLock, waitTimeMs);
+            }
+            if (!m_PresentWarmed && (int)m_PresentQueue.size() >= m_PresentBufferFrames + 1) {
+                m_PresentWarmed = true;
+            }
+            if (m_PresentWarmed && !m_PresentQueue.empty()) {
+                frame = m_PresentQueue.front();
+                m_PresentQueue.pop();
+            }
+        }
+        else if (m_LatestUnrenderedFrame != nullptr || SDL_CondWaitTimeout(m_FrameReady, m_FrameLock, waitTimeMs) == 0) {
             frame = m_LatestUnrenderedFrame;
             m_LatestUnrenderedFrame = nullptr;
         }
@@ -1097,6 +1156,16 @@ private:
     double m_LastPresentTs;
     int m_PresentRowsSinceFlush;
     qint64 m_PresentPid;
+
+    // Optional present-side jitter buffer (enabled via ML_PRESENT_BUFFER, in
+    // whole frames). When set, the display link draws from a FIFO cushion of this
+    // depth (presenting the oldest frame) instead of the single latest-wins
+    // m_LatestUnrenderedFrame above, trading that many frames of latency for the
+    // ability to cover a late arrival without repeating. m_PresentWarmed gates the
+    // initial fill.
+    std::queue<AVFrame*> m_PresentQueue;
+    int m_PresentBufferFrames;
+    bool m_PresentWarmed;
 };
 
 @implementation DisplayLinkDelegate {
