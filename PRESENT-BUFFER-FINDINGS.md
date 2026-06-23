@@ -37,7 +37,7 @@ Two cadence-break types, both counted:
 - **repeat**: a refresh with no fresh frame (present interval > 1.5× baseline); the previous frame is shown twice.
 - **skip**: a decoded frame dropped at handoff because the source ran ahead.
 
-240 s runs, ~13.6k present events each, post-reboot:
+Three interleaved 240 s passes per cushion depth, ~13.6k present events each, post-reboot. Each row below is the mean of the three passes:
 
 | Cushion | Added latency | Repeats/min | Skips/min | Total breaks/min | Effective fps |
 | --- | --- | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ Earlier 90 s matrix covering the 1-frame depth (different absolute level — pre
 
 ## Conclusions
 
-- 2 frames (33 ms) gave the largest reduction: ~43% fewer total breaks than the 0-frame control, from a ~70% cut in skips and ~29% fewer repeats, with multi-frame stalls roughly halved. Consistent across three matrices.
+- 2 frames (33 ms) gave the largest reduction: ~43% fewer total breaks than the 0-frame control, from a ~70% cut in skips and ~29% fewer repeats, with multi-frame stalls roughly halved. The buffer-helps pattern held in all three passes.
 - 1 frame (16.7 ms) helped less — intermediate in the one matrix that covered it, and noisier.
 - 3 frames (50 ms) showed no improvement over 2 within noise.
 - The residual ~18 repeats/min correspond to host↔client clock drift (cf. [Apollo#372](https://github.com/ClassicOldSong/Apollo/issues/372), [Sunshine#2286](https://github.com/LizardByte/Sunshine/issues/2286)) plus sub-half-frame slips absorbed by the display link's half-frame wait.
