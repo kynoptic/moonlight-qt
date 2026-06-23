@@ -35,6 +35,7 @@
 #define SER_STARTWINDOWED "startwindowed"
 #define SER_FRAMEPACING "framepacing"
 #define SER_PRESENT_JITTER_BUFFER "presentjitterbuffer"
+#define SER_IGNORE_ASPECT_RATIO "ignoreaspectratio"
 #define SER_CONNWARNINGS "connwarnings"
 #define SER_CONFWARNINGS "confwarnings"
 #define SER_UIDISPLAYMODE "uidisplaymode"
@@ -140,6 +141,7 @@ void StreamingPreferences::reload()
     absoluteTouchMode = settings.value(SER_ABSTOUCHMODE, true).toBool();
     framePacing = settings.value(SER_FRAMEPACING, false).toBool();
     presentJitterBuffer = settings.value(SER_PRESENT_JITTER_BUFFER, false).toBool();
+    ignoreAspectRatio = settings.value(SER_IGNORE_ASPECT_RATIO, false).toBool();
     connectionWarnings = settings.value(SER_CONNWARNINGS, true).toBool();
     configurationWarnings = settings.value(SER_CONFWARNINGS, true).toBool();
     richPresence = settings.value(SER_RICHPRESENCE, true).toBool();
@@ -341,6 +343,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_ABSTOUCHMODE, absoluteTouchMode);
     settings.setValue(SER_FRAMEPACING, framePacing);
     settings.setValue(SER_PRESENT_JITTER_BUFFER, presentJitterBuffer);
+    settings.setValue(SER_IGNORE_ASPECT_RATIO, ignoreAspectRatio);
     settings.setValue(SER_CONNWARNINGS, connectionWarnings);
     settings.setValue(SER_CONFWARNINGS, configurationWarnings);
     settings.setValue(SER_RICHPRESENCE, richPresence);
