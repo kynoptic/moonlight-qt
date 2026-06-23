@@ -871,6 +871,23 @@ Flickable {
                                     :
                                       qsTr("HDR streaming is not supported on this PC.")
                 }
+
+                CheckBox {
+                    id: presentBufferCheck
+                    width: parent.width
+                    hoverEnabled: true
+                    visible: Qt.platform.os === "osx"
+                    text: qsTr("Smooth frame delivery")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.presentJitterBuffer
+                    onCheckedChanged: {
+                        StreamingPreferences.presentJitterBuffer = checked
+                    }
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 8000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Buffers a couple of frames before display to cover late arrivals, reducing stutter at the cost of about 33 ms of added latency. macOS only.")
+                }
             }
         }
 
