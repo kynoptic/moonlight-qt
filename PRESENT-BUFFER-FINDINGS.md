@@ -24,6 +24,8 @@ Consequences for the earlier instrumentation:
 - `ML_MIN_LATENCY`, placed in `handleVsync`, never ran on macOS; an A/B against it showed no effect.
 - `ML_PACER_CSV` logged decode→renderer handoff cadence, not frames on glass.
 
+A Pacer-side floor can still apply on macOS when implemented off the vsync path — for example, on a dedicated thread that handles the no-vsync branch (as in upstream PR #1139) rather than in `handleVsync`.
+
 `ML_PRESENT_BUFFER` replaces the single latest-wins frame in the renderer with a FIFO cushion of N frames and presents the oldest, so a late arrival is covered from buffered frames rather than repeating.
 
 ## A/B results
