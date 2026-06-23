@@ -93,7 +93,8 @@ public:
           m_PresentRowsSinceFlush(0),
           m_PresentPid(0),
           m_PresentBufferFrames(0),
-          m_PresentWarmed(false)
+          m_PresentWarmed(false),
+          m_IgnoreAspectRatio(false)
     {
     }
 
@@ -193,7 +194,10 @@ public:
         dst.x = dst.y = 0;
         dst.w = drawableWidth;
         dst.h = drawableHeight;
-        StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+
+        if (!m_IgnoreAspectRatio) {
+            StreamUtils::scaleSourceToDestinationSurface(&src, &dst);
+        }
 
         // Convert screen space to normalized device coordinates
         SDL_FRect renderRect;
@@ -894,6 +898,9 @@ public:
 
             // Allow tearing if V-Sync is off (also requires direct display path)
             m_MetalLayer.displaySyncEnabled = params->enableVsync;
+
+            // Stretch to fill the surface when the aspect ratio is ignored
+            m_IgnoreAspectRatio = params->ignoreAspectRatio;
         }
 
         return true;
@@ -1166,6 +1173,8 @@ private:
     std::queue<AVFrame*> m_PresentQueue;
     int m_PresentBufferFrames;
     bool m_PresentWarmed;
+
+    bool m_IgnoreAspectRatio;
 };
 
 @implementation DisplayLinkDelegate {

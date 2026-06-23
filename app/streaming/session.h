@@ -189,7 +189,8 @@ private:
                        int frameRate, bool enableVsync, bool enableFramePacing,
                        bool testOnly,
                        IVideoDecoder*& chosenDecoder,
-                       int presentBufferFrames = 0);
+                       int presentBufferFrames = 0,
+                       bool ignoreAspectRatio = false);
 
     static
     void clStageStarting(int stage);

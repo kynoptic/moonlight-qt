@@ -115,6 +115,9 @@ private:
     pl_swapchain_frame m_SwapchainFrame = {};
     bool m_HasPendingSwapchainFrame = false;
 
+    // Stretch the video to fill the surface instead of preserving aspect ratio
+    bool m_IgnoreAspectRatio = false;
+
     // Overlay state
     SDL_SpinLock m_OverlayLock = 0;
     struct {
