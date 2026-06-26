@@ -876,7 +876,11 @@ Flickable {
                     id: presentBufferCheck
                     width: parent.width
                     hoverEnabled: true
-                    visible: Qt.platform.os === "osx"
+                    // Only effective in the VideoToolbox Metal renderer. macOS defaults to the
+                    // libplacebo renderer (which ignores this setting), so hide it unless the
+                    // renderer selection below resolves to VT Metal. Passing the preference in
+                    // keeps this binding live when the user changes the Renderer dropdown.
+                    visible: Qt.platform.os === "osx" && SystemProperties.usesVtMetalRenderer(StreamingPreferences.rendererSelection)
                     text: qsTr("Smooth frame delivery")
                     font.pointSize: 12
                     checked: StreamingPreferences.presentJitterBuffer
@@ -886,7 +890,7 @@ Flickable {
                     ToolTip.delay: 1000
                     ToolTip.timeout: 8000
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Buffers a couple of frames before display to cover late arrivals, reducing stutter at the cost of about 33 ms of added latency. macOS only.")
+                    ToolTip.text: qsTr("Buffers a couple of frames before display to cover late arrivals, reducing stutter at the cost of about 33 ms of added latency. macOS VideoToolbox Metal renderer only.")
                 }
 
                 CheckBox {
