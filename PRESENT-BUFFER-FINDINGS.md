@@ -4,6 +4,12 @@ Branch `experiment/pacer-csv`. Measures whether a client-side present buffer red
 
 Companion analyzer and cross-host attribution: [play-telemetry](https://gitea.kynoptic.synology.me/kynoptic/play-telemetry) (`client_present` layer).
 
+## Renderer scope
+
+These results and the present buffer itself apply only to the VideoToolbox Metal renderer (`vt_metal.mm`), which presents through CAMetalDisplayLink with a latest-wins frame model. macOS defaults to the libplacebo renderer (`PlVkRenderer` on MoltenVK), which presents through a Vulkan swapchain and does not read `presentBufferFrames` — the present buffer has no effect there. The VT Metal renderer is active only when libplacebo is opted out with `PREFER_VULKAN=0`, and the **Smooth frame delivery** setting is hidden otherwise.
+
+The libplacebo renderer's analogous mechanism is its dynamic swapchain depth: it escalates the Vulkan swapchain from 1 to 2 frames when present time exceeds 110% of the frame interval for ~0.5 s, adding one frame of buffering reactively rather than the static cushion measured here. That path is uninstrumented and unmeasured; the figures below do not transfer to it.
+
 ## What's in the branch
 
 | Knob (env var) | File | Description |
@@ -11,7 +17,7 @@ Companion analyzer and cross-host attribution: [play-telemetry](https://gitea.ky
 | `ML_PRESENT_CSV` | `vt_metal.mm` | Logs on-glass present cadence at the CAMetalDisplayLink present point. |
 | `ML_PRESENT_BUFFER` | `vt_metal.mm` | FIFO present cushion, in whole frames. |
 
-`ML_PRESENT_BUFFER` is also exposed in the UI as the macOS-only **Smooth frame delivery** setting, which enables a 2-frame cushion. The environment variable overrides the setting for other depths.
+`ML_PRESENT_BUFFER` is also exposed in the UI as the **Smooth frame delivery** setting (shown only when the VT Metal renderer is active, per Renderer scope above), which enables a 2-frame cushion. The environment variable overrides the setting for other depths.
 
 Earlier Pacer-side instrumentation — `ML_PACER_CSV` (decode→renderer handoff CSV) and `ML_MIN_LATENCY` (a frame-floor in `handleVsync`) — has been removed; both were inert on macOS (see below).
 
