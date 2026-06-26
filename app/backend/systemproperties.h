@@ -43,6 +43,10 @@ public:
     Q_INVOKABLE void waitForAsyncLoad();
     Q_INVOKABLE void refreshDisplays();
 
+    // Takes a StreamingPreferences::RendererSelection value. Pass the live preference from QML
+    // so the binding re-evaluates when the user changes the renderer.
+    Q_INVOKABLE bool usesVtMetalRenderer(int rendererSelection) const;
+
 signals:
     void unmappedGamepadsChanged();
     void hasHardwareAccelerationChanged();

@@ -4,6 +4,7 @@
 #include <QGuiApplication>
 #include <QLibraryInfo>
 
+#include "settings/streamingpreferences.h"
 #include "streaming/session.h"
 #include "streaming/streamutils.h"
 
@@ -143,6 +144,29 @@ void SystemProperties::updateDecoderProperties(bool hasHardwareAcceleration, boo
     SDL_DestroyWindow(testWindow);
     testWindow = nullptr;
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+bool SystemProperties::usesVtMetalRenderer(int rendererSelection) const
+{
+#ifdef Q_OS_DARWIN
+    // The present-buffer ("Smooth frame delivery") setting only takes effect in the
+    // VideoToolbox Metal renderer (vt_metal.mm), so the UI needs to know when that
+    // renderer will actually be used. This must mirror the macOS renderer selection
+    // in FFmpegVideoDecoder::createHwAccelRenderer().
+#ifdef HAVE_LIBPLACEBO_VULKAN
+    // libplacebo wins for both Automatic and Vulkan when it's compiled in
+    if (rendererSelection == StreamingPreferences::RS_AUTO ||
+        rendererSelection == StreamingPreferences::RS_VULKAN) {
+        return false;
+    }
+#endif
+
+    // AVSampleBufferDisplayLayer is its own renderer; everything else lands on VT Metal
+    return rendererSelection != StreamingPreferences::RS_AVSBDL;
+#else
+    Q_UNUSED(rendererSelection);
+    return false;
+#endif
 }
 
 QRect SystemProperties::getNativeResolution(int displayIndex)
