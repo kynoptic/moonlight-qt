@@ -6,7 +6,7 @@ Companion analyzer and cross-host attribution: [play-telemetry](https://gitea.ky
 
 ## Renderer scope
 
-These results and the present buffer itself apply only to the VideoToolbox Metal renderer (`vt_metal.mm`), which presents through CAMetalDisplayLink with a latest-wins frame model. macOS defaults to the libplacebo renderer (`PlVkRenderer` on MoltenVK), which presents through a Vulkan swapchain and does not read `presentBufferFrames` — the present buffer has no effect there. The VT Metal renderer is active only when libplacebo is opted out with `PREFER_VULKAN=0`, and the **Smooth frame delivery** setting is hidden otherwise.
+These results and the present buffer itself apply only to the VideoToolbox Metal renderer (`vt_metal.mm`), which presents through CAMetalDisplayLink with a latest-wins frame model. macOS defaults to the libplacebo renderer (`PlVkRenderer` on MoltenVK), which presents through a Vulkan swapchain and does not read `presentBufferFrames` — the present buffer has no effect there. The VT Metal renderer is active only when **Metal** is chosen in Settings → Renderer, or when libplacebo is unavailable; the **Smooth frame delivery** setting is hidden otherwise.
 
 The libplacebo renderer's analogous mechanism is its dynamic swapchain depth: it escalates the Vulkan swapchain from 1 to 2 frames when present time exceeds 110% of the frame interval for ~0.5 s, adding one frame of buffering reactively rather than the static cushion measured here. That path is uninstrumented and unmeasured; the figures below do not transfer to it.
 
@@ -71,6 +71,8 @@ Earlier 90 s matrix covering the 1-frame depth (different absolute level — pre
 The effect is a ~40% reduction in residual cadence breaks (mostly skips) at 33 ms added latency, on a stream that was already ~98% on-cadence (effective fps 59.51 → 59.66). Matching stream rate to display refresh, and a 120 Hz/VRR client display (untested here; `preferredFrameRateRange` on the display link is wired for VRR), address jitter and drift without added latency.
 
 ## Reproduce
+
+Set Settings → Renderer to **Metal** first; the present buffer is inert on the default libplacebo renderer.
 
 ```sh
 make release   # Homebrew Qt on PATH
