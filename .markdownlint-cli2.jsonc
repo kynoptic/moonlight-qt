@@ -1,0 +1,28 @@
+{
+  // Configuration for markdownlint-styleguide.
+  // Bare `markdownlint-cli2` with no arguments lints nothing, and the pre-commit hook
+  // runs it with pass_filenames: false. Without these globs the hook can never fail.
+  "globs": ["**/*.md"],
+  "gitignore": true,
+  "ignores": [
+    ".claude/**",
+    // Dependencies are not authored prose. gitignore:true reads only the repo's
+    // own .gitignore, so a repo relying on the global one still needs this.
+    "node_modules",
+    // Distributed from agent-playbook and edited there, not here. Their angle-bracket
+    // placeholders parse as inline HTML, which is a property of the template.
+    ".gitea/**",
+    ".github/**",
+    // Symlink to AGENTS.md; linting it repeats every finding from that file.
+    "CLAUDE.md",
+    // Canonical templates carrying <angle-bracket> placeholders, which parse as inline
+    // HTML. Editing them to satisfy the linter would diverge them from their source.
+    "**/*-template.md"
+  ],
+  "customRules": [
+    "markdownlint-styleguide"
+  ],
+  "config": {
+    "extends": "markdownlint-styleguide/recommended-markdownlint.jsonc"
+  }
+}

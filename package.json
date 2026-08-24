@@ -1,0 +1,17 @@
+{
+  "name": "moonlight-qt",
+  "version": "1.0.0",
+  "description": "[Moonlight PC](https://moonlight-stream.org) is an open source PC client for NVIDIA GameStream and [Sunshine](https://github.com/LizardByte/Sunshine).",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "private": true,
+  "devDependencies": {
+    "markdownlint-cli2": "^0.23.2",
+    "markdownlint-styleguide": "github:kynoptic/markdownlint-styleguide#v4.1.2"
+  }
+}
