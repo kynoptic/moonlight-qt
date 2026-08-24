@@ -13,5 +13,9 @@
   "devDependencies": {
     "markdownlint-cli2": "^0.23.2",
     "markdownlint-styleguide": "github:kynoptic/markdownlint-styleguide#v4.1.2"
+  },
+  "scripts": {
+    "lint:md": "markdownlint-cli2",
+    "lint:md:fix": "markdownlint-cli2 --fix"
   }
 }
