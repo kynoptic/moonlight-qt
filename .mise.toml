@@ -1,0 +1,5 @@
+# Pinned toolchain (managed by mise) — decouples this repo from the
+# Homebrew-global runtimes so `brew upgrade` cannot change its versions.
+[tools]
+node = "25"
+python = "3.14"
