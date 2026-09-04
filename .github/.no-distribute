@@ -1,0 +1,11 @@
+# Opts this repo's .github/ templates out of agent-playbook central distribution.
+#
+# Recognized by agent-playbook's build-tools/distribute-local.js: when present,
+# dist:local skips this repo's .github/ dir for both copying and drift detection.
+#
+# This repo is a public fork of moonlight-stream/moonlight-qt kept for personal
+# builds. Personal issue templates, PR templates, and CI gate workflows must not
+# be committed to it — they would pollute the fork and could ride along in
+# upstream pull requests.
+#
+# Remove this file to rejoin central distribution (templates will be overwritten).
