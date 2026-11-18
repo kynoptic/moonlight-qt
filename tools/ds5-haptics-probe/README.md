@@ -32,7 +32,7 @@ Each block is 10.67 ms of vibration, so smooth playback needs 94 blocks per seco
 | `0x33` (`pack2`), two blocks per report, up to 4 in flight | ~44 per second | 304 of 650 reports finished in 13.7 s |
 | 78-byte no-op `0x31` report, wait for each send | — | 15.0 ms average per send |
 
-Every row with a recorded wall time moved about 4.5-4.7 KB/s, and send time grows with report size, so the link limits bytes, not reports. Four reports in flight delivered no more than waiting for each send. Packing two blocks into a 206-byte `0x33` report spends 103 bytes per block instead of 142, which is where the extra third comes from. Whether the controller plays `0x33` the way it plays the documented two-block `0x39` layout is not confirmed by feel.
+Every row with a recorded wall time moved about 4.5-4.7 KB/s, and send time grows with report size, so the link limits bytes, not reports. Four reports in flight delivered no more than waiting for each send. Packing two blocks into a 206-byte `0x33` report spends 103 bytes per block instead of 142, which is where the extra third comes from.
 
 Conditions for every row: MacBookAir10,1 (BCM_4378 Bluetooth), macOS 27.2.1, a DualSense on firmware 1.0.0 at RSSI -46, measured 2026-11-17. An Apple keyboard and trackpad were also connected over Bluetooth, and a Moonlight app was running but not streaming. Each run plays 14 s of patterns at the ideal rate: 1,310 one-block or 650 two-block reports.
 
@@ -40,4 +40,6 @@ macOS accepted every report it was handed. The limit is how fast its Bluetooth s
 
 Pacing uses the Mach timer. A run-loop timeout used as the wait gets coalesced by macOS for a background process and stalls about 100 ms at a time, which shows up as dropped reports that have nothing to do with Bluetooth.
 
-In a hand test, the one-block `0x32` patterns at ~33 blocks per second did not feel broken. The `pack2` patterns have no feel result recorded.
+Thread priority is not the limit. At user-interactive priority, the `pack1` and `pack2` runs started each send an average of 1.8 and 3.3 ms after its deadline (worst 3.0 and 14.9 ms), and every send call returned in under 1.5 ms. Blocks were dropped only because four reports were still waiting on Bluetooth.
+
+In a hand test, the one-block `0x32` patterns at ~33 blocks per second did not feel broken. Run back to back with the user told which was which, the `pack2` patterns at ~44 blocks per second felt a little better, so the controller plays the two-block `0x33` layout.
