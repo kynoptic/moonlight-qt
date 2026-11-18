@@ -82,6 +82,29 @@ INCLUDEPATH += \
     $$COMMON_C_DIR/nanors/deps/obl
 DEFINES += HAS_SOCKLEN_T
 
+# DualSense waveform haptics (Vibeshine): apply this fork's small patch to the
+# submodule at qmake time. Already applied is skipped; anything else stops the build.
+macx {
+    HAPTICS_DIR = $$PWD/haptics
+    HAPTICS_GIT = git -C $$shell_quote($$COMMON_C_DIR)
+    HAPTICS_PATCH = $$shell_quote($$HAPTICS_DIR/common-c-haptics.patch)
+    system("$$HAPTICS_GIT apply --reverse --check $$HAPTICS_PATCH > /dev/null 2>&1") {
+        message("common-c haptics patch already applied")
+    } else:system("$$HAPTICS_GIT apply --check $$HAPTICS_PATCH > /dev/null 2>&1") {
+        !system("$$HAPTICS_GIT apply $$HAPTICS_PATCH") {
+            error("Applying the common-c haptics patch failed.")
+        }
+        message("Applied the common-c haptics patch")
+    } else {
+        error("The common-c haptics patch does not apply. Reset the submodule with: git -C $$COMMON_C_DIR checkout -- . then re-run qmake. If it still fails, upstream changed the patched lines; regenerate moonlight-common-c/haptics/common-c-haptics.patch.")
+    }
+
+    DEFINES += HAVE_COMMON_C_HAPTICS
+    INCLUDEPATH += $$HAPTICS_DIR
+    HEADERS += $$HAPTICS_DIR/ControllerHaptics.h
+    SOURCES += $$HAPTICS_DIR/ControllerHapticsHook.c
+}
+
 CONFIG(debug, debug|release) {
     # Enable asserts on debug builds
     DEFINES += LC_DEBUG

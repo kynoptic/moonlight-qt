@@ -1,0 +1,63 @@
+diff --git a/src/ControlStream.c b/src/ControlStream.c
+index 3babb7f..3ec010c 100644
+--- a/src/ControlStream.c
++++ b/src/ControlStream.c
+@@ -3,6 +3,13 @@
+ // This is a private header, but it just contains some time macros
+ #include <enet/time.h>
+ 
++#ifdef HAVE_COMMON_C_HAPTICS
++#include "ControllerHaptics.h"
++
++// Link-time proof that common-c-haptics.patch is applied; see ControllerHapticsHook.c
++const int MlHapticsPatchApplied = 1;
++#endif
++
+ #ifndef MIN
+ #define MIN(x, y) ((x) < (y) ? (x) : (y))
+ #endif
+@@ -1510,6 +1517,19 @@ static void controlReceiveThreadFunc(void* context) {
+                 PltUnlockMutex(&hdrMutex);
+             }
+ 
++#ifdef HAVE_COMMON_C_HAPTICS
++            // Waveform haptics are handed over on this thread and fall through to free(ctlHdr)
++            if (ctlHdr->type == ML_HAPTICS_PACKET_TYPE) {
++                MlControllerHapticsCallback hapticsCallback = MlHapticsCallback;
++                const uint8_t* payload = (const uint8_t*)(ctlHdr + 1);
++                if (hapticsCallback != NULL && packetLength >= (int)sizeof(*ctlHdr) &&
++                    MlHapticsValidate(payload, (size_t)packetLength - sizeof(*ctlHdr))) {
++                    hapticsCallback(MlHapticsRead16(payload + 2), MlHapticsRead32(payload + 4),
++                                    payload + ML_HAPTICS_HEADER_SIZE, MlHapticsRead16(payload + 8));
++                }
++            }
++#endif
++
+             // Process client callbacks in a separate thread
+             if (needsAsyncCallback(ctlHdr->type)) {
+                 queueAsyncCallback(ctlHdr, packetLength);
+diff --git a/src/SdpGenerator.c b/src/SdpGenerator.c
+index 5ea5cbb..c00ad73 100644
+--- a/src/SdpGenerator.c
++++ b/src/SdpGenerator.c
+@@ -1,5 +1,8 @@
+ #include "Limelight-internal.h"
+ #include <inttypes.h>
++#ifdef HAVE_COMMON_C_HAPTICS
++#include "ControllerHaptics.h"
++#endif
+ 
+ #define MAX_OPTION_NAME_LEN 128
+ 
+@@ -270,6 +273,11 @@ static PSDP_OPTION getAttributesList(char*urlSafeAddr) {
+     if (IS_SUNSHINE()) {
+         // Send client feature flags to Sunshine hosts
+         uint32_t moonlightFeatureFlags = ML_FF_FEC_STATUS | ML_FF_SESSION_ID_V1;
++#ifdef HAVE_COMMON_C_HAPTICS
++        if (MlHapticsCallback != NULL) {
++            moonlightFeatureFlags |= ML_FF_HAPTICS_PCM;
++        }
++#endif
+         snprintf(payloadStr, sizeof(payloadStr), "%" PRIu32, moonlightFeatureFlags);
+         err |= addAttributeString(&optionHead, "x-ml-general.featureFlags", payloadStr);
+ 
