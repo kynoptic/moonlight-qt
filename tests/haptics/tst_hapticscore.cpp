@@ -525,6 +525,56 @@ private slots:
         QVERIFY(!gate.playing());
     }
 
+    // The harness's "second block only" pattern (tools/ds5-haptics-probe/
+    // haptics_harness.cpp): signal in odd 32-frame blocks, quiet blocks carrying
+    // +1, which still decimates to 0 but keeps the packets from being dropped as
+    // silence. Every report it produces must hold signal only in its second block.
+    void secondBlockPatternStaysInSecondBlock()
+    {
+        GateConfig c;
+        c.maxInFlight = 8;
+        Gate gate(c);
+        uint8_t r[kMaxReportBytes];
+        const int16_t quiet = 1;
+        uint64_t nextTick = 0;
+        bool ticking = false;
+        int sent = 0;
+        long frame = 0;
+        for (uint32_t p = 0; p < 400; p++) {  // 2 s of 5 ms packets
+            const uint64_t now = (uint64_t)p * 5 * kMs;
+            std::vector<uint8_t> pcm(240 * 4);
+            for (int i = 0; i < 240; i++, frame++) {
+                long block = (frame / kDecimation) / kBlockFrames;
+                int16_t s = (block % 2) ? (int16_t)(0.8 * 32767 * sin(2 * M_PI * 160 * frame / 48000.0)) : quiet;
+                if ((block % 2) && s == 0) s = 1000;
+                for (int ch = 0; ch < 2; ch++) {
+                    pcm[i * 4 + ch * 2] = (uint8_t)((uint16_t)s & 0xff);
+                    pcm[i * 4 + ch * 2 + 1] = (uint8_t)((uint16_t)s >> 8);
+                }
+            }
+            gate.receive(p + 1, pcm.data(), 240, now);
+            if (!ticking) {
+                ticking = true;
+                nextTick = now;  // the worker wakes on the first packet
+            }
+            while (nextTick <= now) {
+                TickResult t = gate.tick(nextTick, r);
+                if (t.action == TickAction::Send && !t.waveformEnded) {
+                    sent++;
+                    bool firstQuiet = true, secondLoud = false;
+                    for (int i = 0; i < kBlockBytes; i++) firstQuiet &= pcmAt(r, 2, i) == 0;
+                    for (int i = kBlockBytes; i < 2 * kBlockBytes; i++) secondLoud |= pcmAt(r, 2, i) != 0;
+                    QVERIFY2(firstQuiet && secondLoud, qPrintable(QString("report %1 misaligned").arg(sent)));
+                    gate.onSent(true);
+                }
+                nextTick += gate.periodNs();
+            }
+        }
+        QVERIFY(sent > 80);
+        QCOMPARE(gate.stats().framesTrimmed, (uint64_t)0);
+        QCOMPARE(gate.stats().packetsSilentIdle, (uint64_t)0);
+    }
+
     void newWaveformAfterIdleStartsAgain()
     {
         GateConfig c;

@@ -55,11 +55,17 @@ double sweep(double t, long, int)
     return sin(2 * M_PI * (f0 * t + (f1 - f0) * t * t / (2 * d)));
 }
 double taps(double t, long, int) { return fmod(t, 0.2) < 0.03 ? sin(2 * M_PI * 220 * t) : 0; }
+double g_Strength = 0.8;
+
 // 48 kHz frame -> 3 kHz frame -> 32-frame block; odd blocks are a report's second.
+// Quiet blocks carry +1, which decimates to exactly 0 but keeps the opening
+// packets from being dropped as silence; dropping them would shift the gate's
+// timeline and land the signal in each report's first block
+// (tests/haptics: secondBlockPatternStaysInSecondBlock).
 double secondBlockOnly(double t, long frame, int)
 {
     long block = (frame / Ds5Haptics::kDecimation) / Ds5Haptics::kBlockFrames;
-    return (block % 2) ? sin(2 * M_PI * 160 * t) : 0;
+    return (block % 2) ? sin(2 * M_PI * 160 * t) : 1.0 / (32767 * g_Strength);
 }
 
 uint32_t g_Sequence = 1;
@@ -93,6 +99,7 @@ int main(int argc, char** argv)
 {
     mach_timebase_info(&g_Timebase);
     const double strength = argc > 1 ? std::fmin(1.0, std::fmax(0.05, atof(argv[1]))) : 0.8;
+    g_Strength = strength;
 
     // Same rumble hint Moonlight sets before opening controllers.
     SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
