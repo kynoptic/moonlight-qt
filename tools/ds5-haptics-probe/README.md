@@ -58,3 +58,21 @@ In a hand test, the one-block `0x32` patterns at ~33 blocks per second did not f
 | Second block of `0x33` | Plays: the "second block only" pattern buzzed, with no timing shift during it |
 
 Conditions: same Mac, controller, and macOS as above, measured 2026-11-18 with Moonlight closed, `ML_DS5_HAPTICS_PACK=2` and 2 in flight (the defaults), strength 0.8. The user felt all six patterns.
+
+## A real stream delivers close to the full rate
+
+During a game streamed from Vibeshine, the same player delivered nearly every block, roughly double the idle measurements above. P5M for Mac's note that an active link outpaces an idle one held here.
+
+| Result, per second while the waveform played | Value |
+| --- | --- |
+| Blocks delivered | 84-94 (94 is the full rate); typically 86-90 |
+| Host packets in | 198-204 (the host sends one every 5 ms, continuously while a game drives the actuators) |
+| Reports skipped at the 2-in-flight cap | 0-5 |
+| Failed sends | 0 |
+| Late or stale packets | 0 |
+| Frames trimmed to keep the newest | 0-110 of about 3,000 |
+| Packets cleared by queue overflow | 8 or 16 in 3 of the 38 lines, after network bursts |
+
+The user felt HD vibration in the game. The log recorded no ordinary rumble commands that session.
+
+Conditions: same Mac, controller, and macOS as above, measured 2026-11-18. Moonlight test build from `feat-ds5-haptics`, 60 FPS stream, defaults (`ML_DS5_HAPTICS_PACK=2`, 2 in flight). Vibeshine 2.0.6 or newer, with its DualSense USB audio and haptics component installed and the gamepad setting on automatic. Per-second lines from `/tmp/Moonlight-*.log`: 38 in all, 33 of them full seconds of play at 84-94 blocks; the other 5 cover a waveform starting or stopping.
