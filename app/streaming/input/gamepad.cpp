@@ -5,6 +5,11 @@
 #include "settings/mappingmanager.h"
 #include "utils.h"
 
+#ifdef HAVE_DS5_HAPTICS
+#include "ControllerHaptics.h"
+#include "dualsensehaptics.h"
+#endif
+
 #include <QtMath>
 
 // How long the Start button must be pressed to toggle mouse emulation
@@ -589,6 +594,10 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
         state->controller = controller;
         state->jsId = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(state->controller));
 
+#ifdef HAVE_DS5_HAPTICS
+        state->hapticsAttached = DualSenseHaptics::attach(state->index, state->controller);
+#endif
+
         hapticCaps = 0;
 #if SDL_VERSION_ATLEAST(2, 0, 18)
         hapticCaps |= SDL_GameControllerHasRumble(controller) ? ML_HAPTIC_GC_RUMBLE : 0;
@@ -702,6 +711,12 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
         if (SDL_GameControllerHasLED(state->controller)) {
             capabilities |= LI_CCAP_RGB_LED;
         }
+#ifdef HAVE_DS5_HAPTICS
+        if (state->hapticsAttached) {
+            // Vibeshine sends waveform haptics only to controllers that claim this
+            capabilities |= LI_CCAP_HAPTICS_PCM;
+        }
+#endif
 
         uint8_t type;
         switch (SDL_GameControllerGetType(state->controller)) {
@@ -780,6 +795,11 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
                 SDL_RemoveTimer(state->mouseEmulationTimer);
             }
 
+#ifdef HAVE_DS5_HAPTICS
+            if (state->hapticsAttached) {
+                DualSenseHaptics::detach(state->index);
+            }
+#endif
             SDL_GameControllerClose(state->controller);
 
 #if !SDL_VERSION_ATLEAST(2, 0, 9)
@@ -846,6 +866,18 @@ void SdlInputHandler::rumble(unsigned short controllerNumber, unsigned short low
     if (controllerNumber >= MAX_GAMEPADS) {
         return;
     }
+
+#ifdef HAVE_DS5_HAPTICS
+    if (!m_LoggedFirstRumble) {
+        m_LoggedFirstRumble = true;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "First rumble command this session: controller %u, low %u, high %u",
+                    controllerNumber, lowFreqMotor, highFreqMotor);
+    }
+    if (DualSenseHaptics::playing(controllerNumber)) {
+        // A waveform is playing; rumble would take the coils out of waveform mode
+        return;
+    }
+#endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 9)
     if (m_GamepadState[controllerNumber].controller != nullptr) {

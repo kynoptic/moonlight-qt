@@ -5,6 +5,10 @@
 #include "path.h"
 #include "utils.h"
 
+#ifdef HAVE_DS5_HAPTICS
+#include "dualsensehaptics.h"
+#endif
+
 #include <QtGlobal>
 #include <QDir>
 #include <QGuiApplication>
@@ -226,6 +230,11 @@ SdlInputHandler::~SdlInputHandler()
 #if !SDL_VERSION_ATLEAST(2, 0, 9)
         if (m_GamepadState[i].haptic != nullptr) {
             SDL_HapticClose(m_GamepadState[i].haptic);
+        }
+#endif
+#ifdef HAVE_DS5_HAPTICS
+        if (m_GamepadState[i].hapticsAttached) {
+            DualSenseHaptics::detach(m_GamepadState[i].index);
         }
 #endif
         if (m_GamepadState[i].controller != nullptr) {

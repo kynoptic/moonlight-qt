@@ -96,7 +96,7 @@ macx {
         }
         message("Applied the common-c haptics patch")
     } else {
-        error("The common-c haptics patch does not apply. Reset the submodule with: git -C $$COMMON_C_DIR checkout -- . then re-run qmake. If it still fails, upstream changed the patched lines; regenerate moonlight-common-c/haptics/common-c-haptics.patch.")
+        error("The common-c haptics patch does not apply. Reset the submodule with: git -C $$COMMON_C_DIR checkout -- . then run qmake -r moonlight-qt.pro. If it still fails, upstream changed the patched lines; regenerate moonlight-common-c/haptics/common-c-haptics.patch.")
     }
 
     DEFINES += HAVE_COMMON_C_HAPTICS

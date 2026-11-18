@@ -415,6 +415,22 @@ macx {
     HEADERS += \
         streaming/video/ffmpeg-renderers/vt.h
 }
+macx {
+    # DualSense waveform haptics from Vibeshine hosts, over Bluetooth.
+    # Needs the common-c patch that moonlight-common-c.pro applies.
+    DEFINES += HAVE_DS5_HAPTICS
+    INCLUDEPATH += $$PWD/../moonlight-common-c/haptics
+    # Relink when the networking library changes, so a rebuild without the patch
+    # always reaches the linker and fails on the MlHapticsPatchApplied marker.
+    PRE_TARGETDEPS += $$OUT_PWD/../moonlight-common-c/libmoonlight-common-c.a
+    LIBS += -framework IOKit
+    SOURCES += \
+        streaming/input/hapticscore.cpp \
+        streaming/input/dualsensehaptics_mac.cpp
+    HEADERS += \
+        streaming/input/hapticscore.h \
+        streaming/input/dualsensehaptics.h
+}
 discord-rpc {
     message(Discord integration enabled)
 

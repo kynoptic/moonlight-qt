@@ -7,6 +7,11 @@
 #include "SDL_compat.h"
 #include "utils.h"
 
+#ifdef HAVE_DS5_HAPTICS
+#include "ControllerHaptics.h"
+#include "streaming/input/dualsensehaptics.h"
+#endif
+
 #ifdef HAVE_FFMPEG
 #include "video/ffmpeg.h"
 #endif
@@ -1723,6 +1728,13 @@ bool Session::startConnectionAsync()
                                                                          m_StreamConfig.fps,
                                                                          false);
     }
+
+#ifdef HAVE_DS5_HAPTICS
+    // Advertises waveform haptics to Vibeshine hosts; null leaves the stream as upstream
+    LiSetControllerHapticsCallback(DualSenseHaptics::enabled() ? DualSenseHaptics::receive : nullptr);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "DualSense waveform haptics %s for this session",
+                DualSenseHaptics::enabled() ? "advertised" : "disabled (ML_DS5_HAPTICS=0)");
+#endif
 
     int err = LiStartConnection(&hostInfo, &m_StreamConfig, &k_ConnCallbacks,
                                 &m_VideoCallbacks, &m_AudioCallbacks,

@@ -22,6 +22,11 @@ struct GamepadState {
     bool clickpadButtonEmulationEnabled;
     bool emulatedClickpadButtonDown;
 
+#ifdef HAVE_DS5_HAPTICS
+    // A DualSense waveform haptics player is attached to this slot's index.
+    bool hapticsAttached;
+#endif
+
 #if SDL_VERSION_ATLEAST(2, 0, 14)
     uint16_t gyroReportPeriodMs;
     float lastGyroEventData[SDL_arraysize(SDL_ControllerSensorEvent::data)];
@@ -217,6 +222,9 @@ private:
     bool m_PointerRegionLockToggledByUser;
 
     int m_GamepadMask;
+#ifdef HAVE_DS5_HAPTICS
+    bool m_LoggedFirstRumble = false;
+#endif
     GamepadState m_GamepadState[MAX_GAMEPADS];
     QSet<uint32_t> m_KeysDown;
     bool m_FakeMouseCaptureActive;
