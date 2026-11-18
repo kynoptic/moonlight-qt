@@ -43,3 +43,18 @@ Pacing uses the Mach timer. A run-loop timeout used as the wait gets coalesced b
 Thread priority is not the limit. At user-interactive priority, the `pack1` and `pack2` runs started each send an average of 1.8 and 3.3 ms after its deadline (worst 3.0 and 14.9 ms), and every send call returned in under 1.5 ms. Blocks were dropped only because four reports were still waiting on Bluetooth.
 
 In a hand test, the one-block `0x32` patterns at ~33 blocks per second did not feel broken. Run back to back with the user told which was which, the `pack2` patterns at ~44 blocks per second felt a little better, so the controller plays the two-block `0x33` layout.
+
+## The app's player matches the probe
+
+`haptics_harness.cpp` drives Moonlight's own player (`app/streaming/input/dualsensehaptics_mac.cpp`) with Vibeshine-shaped packets: 240 frames at 48 kHz every 5 ms, through the real gate and a second IOKit handle beside SDL's. The build and run commands are in its header.
+
+| Result | Value |
+| --- | --- |
+| Device lookup | Matched by SDL's `DevSrvsID:` path, which equals the IOKit registry entry ID |
+| Delivery while a pattern plays | 42-48 blocks per second, from the per-second log lines with no silence in them |
+| Failed sends | 0 |
+| Late, stale, overflowed, or trimmed audio | 0 in every line |
+| Reports skipped at the 2-in-flight cap | 22-26 per second while a pattern plays |
+| Second block of `0x33` | Plays: the "second block only" pattern buzzed, with no timing shift during it |
+
+Conditions: same Mac, controller, and macOS as above, measured 2026-11-18 with Moonlight closed, `ML_DS5_HAPTICS_PACK=2` and 2 in flight (the defaults), strength 0.8. The user felt all six patterns.
