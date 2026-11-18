@@ -26,6 +26,8 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # Blank context lines in a diff are a single space; stripping them breaks the patch.
+        exclude: \.patch$
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
