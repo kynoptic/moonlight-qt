@@ -180,7 +180,7 @@ private:
             Ds5Haptics::buildFullPowerReport(report);
             IOReturn rc = IOHIDDeviceSetReport(m_Device, kIOHIDReportTypeOutput, report[0], report, sizeof(report));
             if (rc != kIOReturnSuccess) {
-                SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "DualSense haptics: setup report failed on slot %d: 0x%08x",
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: setup report failed on slot %d: 0x%08x",
                             m_Slot, rc);
             }
             m_PoweredUp = true;
@@ -188,7 +188,7 @@ private:
         // SDL's rumble emulation flags take the coils out of waveform mode, so
         // clear any rumble SDL remembers before the first report.
         SDL_GameControllerRumble(m_Controller, 0, 0, 0);
-        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "DualSense haptics: waveform started on slot %d", m_Slot);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: waveform started on slot %d", m_Slot);
     }
 
     void send(const uint8_t* report, size_t length)
@@ -205,7 +205,7 @@ private:
             }
             if (rc == kIOReturnNotOpen || rc == kIOReturnNoDevice || rc == kIOReturnNotAttached) {
                 m_Failed = true;
-                SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                             "DualSense haptics: controller gone on slot %d (0x%08x); waveforms off until it reconnects",
                             m_Slot, rc);
             }
@@ -228,7 +228,7 @@ private:
         if (s.packetsIn != p.packetsIn || s.reportsSent != p.reportsSent || s.reportsSkipped != p.reportsSkipped) {
             const double seconds = (now - m_LastLogNs) / 1e9;
             const uint64_t blocks = (s.reportsCompleted - p.reportsCompleted) * (uint64_t)m_Gate.config().blocksPerReport;
-            SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                         "DualSense haptics slot %d: %.0f blocks/s delivered | packets in %llu, late %llu, stale %llu, "
                         "overflow %llu, idle-silent %llu | reports sent %llu, done %llu, failed %llu, skipped %llu | "
                         "trimmed %llu frames | first error 0x%08x",
@@ -433,7 +433,7 @@ bool attach(int slot, SDL_GameController* controller)
     std::string why;
     IOHIDDeviceRef device = findDevice(manager, controller, why);
     if (device == nullptr) {
-        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "DualSense haptics: no HID device for slot %d (%s, SDL path %s)",
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: no HID device for slot %d (%s, SDL path %s)",
                     slot, why.c_str(), SDL_GameControllerPath(controller) ? SDL_GameControllerPath(controller) : "none");
         CFRelease(manager);
         return false;
@@ -441,7 +441,7 @@ bool attach(int slot, SDL_GameController* controller)
 
     std::string transport = stringProperty(device, CFSTR(kIOHIDTransportKey));
     if (transport != "Bluetooth") {
-        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "DualSense haptics: slot %d is on %s; only Bluetooth is supported",
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: slot %d is on %s; only Bluetooth is supported",
                     slot, transport.empty() ? "an unknown transport" : transport.c_str());
         CFRelease(device);
         CFRelease(manager);
@@ -450,7 +450,7 @@ bool attach(int slot, SDL_GameController* controller)
 
     IOReturn rc = IOHIDDeviceOpen(device, kIOHIDOptionsTypeNone);
     if (rc != kIOReturnSuccess) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT, "DualSense haptics: opening slot %d failed: 0x%08x", slot, rc);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: opening slot %d failed: 0x%08x", slot, rc);
         CFRelease(device);
         CFRelease(manager);
         return false;
@@ -465,7 +465,7 @@ bool attach(int slot, SDL_GameController* controller)
         std::lock_guard<std::mutex> lock(g_PlayersMutex);
         g_Players[(size_t)slot] = player;
     }
-    SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "DualSense Bluetooth waveform haptics ready for slot %d (matched by %s; %d block(s) per report, "
                 "%d in flight)",
                 slot, why.c_str(), config.blocksPerReport, config.maxInFlight);
