@@ -26,13 +26,13 @@ Each block is 10.67 ms of vibration, so smooth playback needs 94 blocks per seco
 
 | Send method | Blocks delivered | Notes |
 | --- | --- | --- |
-| `0x32`, one block per report, wait for each send | ~39 per second | 25.5 ms average per 142-byte send, 93 ms worst |
+| `0x32`, one block per report, wait for each send | ≤39 per second | 25.5 ms average per 142-byte send, 93 ms worst; derived from call time, since this run recorded no wall time |
 | `0x32`, one block per report, up to 4 in flight | ~33 per second | 446 and 463 of 1,310 finished in two runs |
-| `0x33` (`pack2`), two blocks per report, wait for each send | ~44 per second | 34.2 ms average per 206-byte send |
+| `0x33` (`pack2`), two blocks per report, wait for each send | ~44 per second | 650 reports in 29.6 s; 34.2 ms average per 206-byte send |
 | `0x33` (`pack2`), two blocks per report, up to 4 in flight | ~44 per second | 304 of 650 reports finished in 13.7 s |
 | 78-byte no-op `0x31` report, wait for each send | — | 15.0 ms average per send |
 
-Every row moved about 4.6-4.7 KB/s, so the link limits bytes, not reports. Packing two blocks into a 206-byte `0x33` report spends 103 bytes per block instead of 142, which is where the extra third comes from. Whether the controller plays `0x33` the way it plays the documented two-block `0x39` layout is not confirmed by feel.
+Every row with a recorded wall time moved about 4.5-4.7 KB/s, and send time grows with report size, so the link limits bytes, not reports. Four reports in flight delivered no more than waiting for each send. Packing two blocks into a 206-byte `0x33` report spends 103 bytes per block instead of 142, which is where the extra third comes from. Whether the controller plays `0x33` the way it plays the documented two-block `0x39` layout is not confirmed by feel.
 
 Conditions for every row: MacBookAir10,1 (BCM_4378 Bluetooth), macOS 27.2.1, a DualSense on firmware 1.0.0 at RSSI -46, measured 2026-11-17. An Apple keyboard and trackpad were also connected over Bluetooth, and a Moonlight app was running but not streaming. Each run plays 14 s of patterns at the ideal rate: 1,310 one-block or 650 two-block reports.
 
