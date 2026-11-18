@@ -13,8 +13,8 @@
 //
 // Build: clang -O2 -Wall -o ds5_bt_haptics_probe ds5_bt_haptics_probe.c \
 //          -framework IOKit -framework CoreFoundation
-// Run:   ./ds5_bt_haptics_probe [strength 0.05-1.0] [async|sync] [max in flight]
-//        Defaults: 0.8, async (send without waiting), 4 in flight.
+// Run:   ./ds5_bt_haptics_probe [strength 0.05-1.0] [async|sync] [max in flight] [pack1|pack2]
+//        Defaults: 0.8, async (send without waiting), 4 in flight, pack1.
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/hid/IOHIDManager.h>
@@ -32,12 +32,21 @@
 #define DUALSENSE_PID 0x0ce6
 #define DUALSENSE_EDGE_PID 0x0df2
 
-#define REPORT_ID 0x32
-#define REPORT_BYTES 142  // report ID + 137 payload bytes + 4 CRC bytes
+#define MAX_REPORT_BYTES 547
 #define PCM_BYTES 64      // 32 stereo frames of signed 8-bit samples
 #define SAMPLE_RATE 3000  // per channel
-#define FRAMES_PER_REPORT (PCM_BYTES / 2)
-#define PERIOD_NS (1000000000ull * FRAMES_PER_REPORT / SAMPLE_RATE)  // 10.67 ms
+#define FRAMES_PER_BLOCK (PCM_BYTES / 2)
+#define BLOCK_NS (1000000000ull * FRAMES_PER_BLOCK / SAMPLE_RATE)  // 10.67 ms
+
+// Default: report 0x32, 142 bytes (ID + 137 payload + 4 CRC), one block.
+// "pack2": report 0x33, 206 bytes, two blocks under one haptics sub-packet,
+// in the layout DS5Dongle and P5M use for report 0x39. Send time grows with
+// bytes, so two blocks in 206 bytes cost less link time than two 142s.
+static uint8_t report_id = 0x32;
+static size_t report_bytes = 142;
+static int blocks_per_report = 1;
+#define FRAMES_PER_REPORT (FRAMES_PER_BLOCK * blocks_per_report)
+#define PERIOD_NS (BLOCK_NS * blocks_per_report)
 
 static mach_timebase_info_data_t timebase;
 
@@ -75,12 +84,23 @@ static void sign_report(uint8_t *report, size_t size)
 // value DS5Dongle and P5M found reliable; more buffering adds latency.
 #define CONTROLLER_QUEUE 16
 
-static void build_report(uint8_t report[REPORT_BYTES], uint8_t sequence,
-                         const int8_t pcm[PCM_BYTES])
+static void build_report(uint8_t *report, uint8_t sequence, const int8_t *pcm)
 {
-    memset(report, 0, REPORT_BYTES);
-    report[0] = REPORT_ID;
+    memset(report, 0, report_bytes);
+    report[0] = report_id;
     report[1] = (uint8_t)((sequence & 0x0f) << 4);
+    if (blocks_per_report == 2) {
+        report[2] = 0x91;                  // audio control, sized
+        report[3] = 6;
+        report[4] = 0x7e;
+        report[5] = report[6] = report[7] = report[8] = CONTROLLER_QUEUE;
+        report[9] = (uint8_t)(sequence * 2);
+        report[10] = 0xd2;                 // haptics, sized, two blocks
+        report[11] = PCM_BYTES;
+        memcpy(report + 12, pcm, 2 * PCM_BYTES);
+        sign_report(report, report_bytes);
+        return;
+    }
     // Sub-packet 0x11 (sized, 7 bytes): audio control, with a running counter.
     report[2] = 0x91;
     report[3] = 7;
@@ -91,7 +111,7 @@ static void build_report(uint8_t report[REPORT_BYTES], uint8_t sequence,
     report[11] = 0x92;
     report[12] = PCM_BYTES;
     memcpy(report + 13, pcm, PCM_BYTES);
-    sign_report(report, REPORT_BYTES);
+    sign_report(report, report_bytes);
 }
 
 // Setup report 0x31: full motor power, haptics filter on, nothing muted.
@@ -185,7 +205,7 @@ static int max_in_flight = 4;
 static int in_flight = 0;
 static unsigned async_completed = 0, async_failed = 0, async_skipped = 0;
 static IOReturn async_first_error = kIOReturnSuccess;
-static uint8_t async_buffers[64][REPORT_BYTES];
+static uint8_t async_buffers[64][MAX_REPORT_BYTES];
 static unsigned async_slot = 0;
 
 static void on_report_sent(void *context, IOReturn result, void *sender, IOHIDReportType type,
@@ -225,7 +245,7 @@ static void play(IOHIDDeviceRef device, const char *name, waveform wave, double 
     uint64_t deadline = now_ns();
     uint64_t frame = 0;
     for (unsigned r = 0; r < reports; r++) {
-        int8_t pcm[PCM_BYTES];
+        int8_t pcm[2 * PCM_BYTES];
         for (int f = 0; f < FRAMES_PER_REPORT; f++, frame++) {
             double t = (double)frame / SAMPLE_RATE;
             for (int ch = 0; ch < 2; ch++) {
@@ -233,7 +253,7 @@ static void play(IOHIDDeviceRef device, const char *name, waveform wave, double 
                 pcm[f * 2 + ch] = (int8_t)lrint(fmax(-127.0, fmin(127.0, v)));
             }
         }
-        uint8_t report[REPORT_BYTES];
+        uint8_t report[MAX_REPORT_BYTES];
         build_report(report, (*sequence)++, pcm);
 
         if (use_async) pump_until_ns(deadline); else sleep_until_ns(deadline);
@@ -250,15 +270,15 @@ static void play(IOHIDDeviceRef device, const char *name, waveform wave, double 
                 rc = kIOReturnSuccess;
             } else {
                 uint8_t *buffer = async_buffers[async_slot++ % 64];
-                memcpy(buffer, report, REPORT_BYTES);
-                rc = IOHIDDeviceSetReportWithCallback(device, kIOHIDReportTypeOutput, REPORT_ID,
-                                                      buffer, REPORT_BYTES, 0.2,
+                memcpy(buffer, report, report_bytes);
+                rc = IOHIDDeviceSetReportWithCallback(device, kIOHIDReportTypeOutput, report_id,
+                                                      buffer, (CFIndex)report_bytes, 0.2,
                                                       on_report_sent, NULL);
                 if (rc == kIOReturnSuccess) in_flight++;
             }
         } else {
-            rc = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, REPORT_ID,
-                                      report, REPORT_BYTES);
+            rc = IOHIDDeviceSetReport(device, kIOHIDReportTypeOutput, report_id,
+                                      report, (CFIndex)report_bytes);
         }
         uint64_t took = now_ns() - start;
         if (took > st->worst_call_ns) st->worst_call_ns = took;
@@ -309,6 +329,11 @@ int main(int argc, char **argv)
     if (argc > 1) amplitude = fmax(0.05, fmin(1.0, atof(argv[1])));
     use_async = !(argc > 2 && strcmp(argv[2], "sync") == 0);
     if (argc > 3) max_in_flight = (int)fmax(1, fmin(32, atoi(argv[3])));
+    if (argc > 4 && strcmp(argv[4], "pack2") == 0) {
+        report_id = 0x33;
+        report_bytes = 206;
+        blocks_per_report = 2;
+    }
     mach_timebase_info(&timebase);
 
     IOHIDManagerRef manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
@@ -331,9 +356,9 @@ int main(int argc, char **argv)
                "so it uses Bluetooth, then run this again.\n", transport);
         return 3;
     }
-    if (max_out >= 0 && max_out < REPORT_BYTES) {
+    if (max_out >= 0 && max_out < (long)report_bytes) {
         printf("RESULT: BLOCKED - macOS reports the controller only accepts %ld-byte output "
-               "reports; the vibration report needs %d.\n", max_out, REPORT_BYTES);
+               "reports; the vibration report needs %zu.\n", max_out, report_bytes);
         return 4;
     }
 
