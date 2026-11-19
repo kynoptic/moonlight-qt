@@ -146,6 +146,25 @@ private slots:
         QCOMPARE(crcField(r, kFullPowerReportBytes), 0xa25a0779u);
     }
 
+    void fullPowerReportClearsFilterWhenFilterOff()
+    {
+        uint8_t on[kFullPowerReportBytes];
+        uint8_t off[kFullPowerReportBytes];
+        buildFullPowerReport(on, true);
+        buildFullPowerReport(off, false);
+        // The filter field stays marked valid, so the controller applies "off"
+        // rather than keeping whatever it had.
+        QCOMPARE(off[4], (uint8_t)0x62);
+        QCOMPARE(off[42], (uint8_t)0x00);
+        for (size_t i = 0; i < kFullPowerReportBytes - 4; i++) {
+            if (i != 42) {
+                QCOMPARE(off[i], on[i]);
+            }
+        }
+        QVERIFY(crcField(off, kFullPowerReportBytes) != crcField(on, kFullPowerReportBytes));
+        QCOMPARE(crcField(on, kFullPowerReportBytes), 0xa25a0779u);
+    }
+
     // ---- Decimator ----
     void decimatorAveragesSixteenToOne()
     {

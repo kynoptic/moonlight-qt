@@ -81,13 +81,13 @@ size_t buildReport(uint8_t* out, size_t capacity, int blocks, uint8_t sequence, 
     return size;
 }
 
-void buildFullPowerReport(uint8_t out[kFullPowerReportBytes])
+void buildFullPowerReport(uint8_t out[kFullPowerReportBytes], bool hapticsFilter)
 {
     memset(out, 0, kFullPowerReportBytes);
     out[0] = 0x31;
     out[2] = 0x10;
     out[4] = 0x02 | 0x20 | 0x40;
-    out[42] = 0x01;
+    out[42] = hapticsFilter ? 0x01 : 0x00;
     signReport(out, kFullPowerReportBytes);
 }
 

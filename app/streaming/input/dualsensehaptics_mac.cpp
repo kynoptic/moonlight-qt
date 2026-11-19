@@ -107,8 +107,9 @@ class Player
 {
 public:
     Player(int slot, SDL_GameController* controller, IOHIDManagerRef manager, IOHIDDeviceRef device,
-           const Ds5Haptics::GateConfig& config)
-        : m_Slot(slot), m_Controller(controller), m_Manager(manager), m_Device(device), m_Gate(config)
+           const Ds5Haptics::GateConfig& config, bool hapticsFilter)
+        : m_Slot(slot), m_Controller(controller), m_Manager(manager), m_Device(device), m_Gate(config),
+          m_HapticsFilter(hapticsFilter)
     {
         m_Worker = std::thread([this] { run(); });
     }
@@ -174,10 +175,10 @@ private:
     void startWaveform()
     {
         if (!m_PoweredUp) {
-            // Full motor power, haptics filter on. Sent at the first waveform rather
+            // Full motor power, haptics filter per ML_DS5_HAPTICS_FILTER. Sent at the first waveform rather
             // than at attach, so a session without HD vibration leaves the pad alone.
             uint8_t report[Ds5Haptics::kFullPowerReportBytes];
-            Ds5Haptics::buildFullPowerReport(report);
+            Ds5Haptics::buildFullPowerReport(report, m_HapticsFilter);
             IOReturn rc = IOHIDDeviceSetReport(m_Device, kIOHIDReportTypeOutput, report[0], report, sizeof(report));
             if (rc != kIOReturnSuccess) {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "DualSense haptics: setup report failed on slot %d: 0x%08x",
@@ -338,6 +339,7 @@ private:
     std::mutex m_Mutex;
     std::condition_variable m_Wake;
     Ds5Haptics::Gate m_Gate;
+    const bool m_HapticsFilter;
     bool m_Stopped = false;
     bool m_Failed = false;
     IOReturn m_FirstError = kIOReturnSuccess;
@@ -459,16 +461,18 @@ bool attach(int slot, SDL_GameController* controller)
     Ds5Haptics::GateConfig config;
     config.blocksPerReport = envInt("ML_DS5_HAPTICS_PACK", 2, 1, 2);
     config.maxInFlight = envInt("ML_DS5_HAPTICS_INFLIGHT", 2, 1, 8);
+    // 0 turns off the controller's own haptics filter, which softens sharp detail.
+    const bool hapticsFilter = envInt("ML_DS5_HAPTICS_FILTER", 1, 0, 1) != 0;
 
-    auto player = std::make_shared<Player>(slot, controller, manager, device, config);
+    auto player = std::make_shared<Player>(slot, controller, manager, device, config, hapticsFilter);
     {
         std::lock_guard<std::mutex> lock(g_PlayersMutex);
         g_Players[(size_t)slot] = player;
     }
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "DualSense Bluetooth waveform haptics ready for slot %d (matched by %s; %d block(s) per report, "
-                "%d in flight)",
-                slot, why.c_str(), config.blocksPerReport, config.maxInFlight);
+                "%d in flight, filter %s)",
+                slot, why.c_str(), config.blocksPerReport, config.maxInFlight, hapticsFilter ? "on" : "off");
     return true;
 }
 

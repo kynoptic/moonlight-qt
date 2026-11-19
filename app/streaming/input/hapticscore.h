@@ -41,9 +41,10 @@ size_t reportBytes(int blocks);
 // Returns its size, or 0 if blocks is not 1 or 2 or capacity is too small.
 size_t buildReport(uint8_t* out, size_t capacity, int blocks, uint8_t sequence, const int8_t* pcm);
 
-// Builds and signs setup report 0x31: full motor power, haptics filter on, and
-// only those fields marked valid, so rumble emulation stays off.
-void buildFullPowerReport(uint8_t out[kFullPowerReportBytes]);
+// Builds and signs setup report 0x31: full motor power, the controller's haptics
+// filter on or off, and only those fields marked valid, so rumble emulation stays
+// off. The filter field is always marked valid, so "off" is applied, not skipped.
+void buildFullPowerReport(uint8_t out[kFullPowerReportBytes], bool hapticsFilter = true);
 
 // 48 kHz signed 16-bit stereo in, 3 kHz signed 8-bit stereo out: each output
 // frame is the average of 16 input frames, scaled to 8 bits. A partial group is
