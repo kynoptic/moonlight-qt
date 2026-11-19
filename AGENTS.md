@@ -34,7 +34,7 @@ in `app/streaming/video/ffmpeg-renderers/vt_metal.mm`:
 | `ML_DS5_HAPTICS` | `0` turns DualSense waveform haptics off: no session flag, no controller capability |
 | `ML_DS5_HAPTICS_INFLIGHT` | Bluetooth haptics reports allowed in flight, 1-8 (default 2) |
 | `ML_DS5_HAPTICS_PACK` | Haptics blocks per Bluetooth report: `2` sends `0x33` (default), `1` sends `0x32` |
-| `ML_DS5_HAPTICS_FILTER` | `0` turns off the controller's own haptics filter, which softens sharp detail (default `1`, on) |
+| `ML_DS5_HAPTICS_FILTER` | `1` turns on the controller's own haptics filter, which softens sharp detail (default `0`, off) |
 
 `PRESENT-BUFFER-FINDINGS.md` holds the measured results and the verdict. The companion
 analyzer lives in the `play-telemetry` repo, under its `client_present` layer.

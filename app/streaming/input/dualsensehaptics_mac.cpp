@@ -461,8 +461,9 @@ bool attach(int slot, SDL_GameController* controller)
     Ds5Haptics::GateConfig config;
     config.blocksPerReport = envInt("ML_DS5_HAPTICS_PACK", 2, 1, 2);
     config.maxInFlight = envInt("ML_DS5_HAPTICS_INFLIGHT", 2, 1, 8);
-    // 0 turns off the controller's own haptics filter, which softens sharp detail.
-    const bool hapticsFilter = envInt("ML_DS5_HAPTICS_FILTER", 1, 0, 1) != 0;
+    // The controller's own haptics filter softens sharp detail, so it is off unless
+    // ML_DS5_HAPTICS_FILTER=1 asks for it.
+    const bool hapticsFilter = envInt("ML_DS5_HAPTICS_FILTER", 0, 0, 1) != 0;
 
     auto player = std::make_shared<Player>(slot, controller, manager, device, config, hapticsFilter);
     {
